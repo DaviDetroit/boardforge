@@ -39,3 +39,17 @@ def editar_casa(
         numero=numero,
         dados=dados
     )
+
+
+@router.post(
+    "/regenerar",
+    response_model=list[CasaResposta]
+)
+def regenerar_tabuleiro(
+    jogo_id: int,
+    db: Session = Depends(get_db)
+):
+    return casa_service.regenerar_tabuleiro(
+        db=db,
+        jogo_id=jogo_id
+    )

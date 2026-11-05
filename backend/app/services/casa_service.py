@@ -7,7 +7,7 @@ from app.repositories.casa_repository import (
     salvar_alteracoes,
 )
 from app.schemas.casa import CasaEditar
-
+from app.services.tabuleiro_service import regenerar_casas
 
 def consultar_casas(db: Session, jogo_id: int):
     return listar_casas(db, jogo_id)
@@ -48,6 +48,46 @@ def editar_casa(
         db.refresh(casa)
 
         return casa
+
+    except Exception:
+        db.rollback()
+        raise
+
+def regenerar_tabuleiro(db: Session, jogo_id: int):
+    casas = listar_casas(db, jogo_id)
+
+    if not casas:
+        raise HTTPException(
+            status_code=404,
+            detail="Jogo não encontrado ou sem casas."
+        )
+
+    try:
+        casas_regeneradas = regenerar_casas(casas)
+
+        # Verifica se há três casas especiais consecutivas.
+        for indice in range(len(casas_regeneradas) - 2):
+            trio = casas_regeneradas[indice:indice + 3]
+
+            if all(
+                casa.tipo not in ("normal", "inicio", "fim")
+                for casa in trio
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Não foi possível regenerar o tabuleiro "
+                        "sem criar três casas especiais consecutivas."
+                    )
+                )
+
+        db.flush()
+        db.commit()
+
+        for casa in casas_regeneradas:
+            db.refresh(casa)
+
+        return casas_regeneradas
 
     except Exception:
         db.rollback()
