@@ -4,7 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.database.connection import engine
 
-from app.routers import jogos
+from app.routers import jogos, casas
 
 
 
@@ -15,6 +15,7 @@ app = FastAPI(
 )
 
 app.include_router(jogos.router)
+app.include_router(casas.router)
 
 
 @app.get("/")
