@@ -1,66 +1,127 @@
-
 from fastapi import HTTPException
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
-from app.repositories.casa_repository import (
-    buscar_casa,
-    listar_casas,
-    salvar_alteracoes,
-)
-from app.schemas.casa import CasaEditar
+from app.repositories import carta_repository
+from app.schemas.carta import CartaCriar, CartaEditar
 
 
-def consultar_casas(db: Session, jogo_id: int):
-    return listar_casas(db, jogo_id)
+# Validar se o jogo de origem existe
+def validar_jogo_origem(db: Session, jogo_id: int | None):
+    if jogo_id is None:
+        return
 
+    consulta = text("""
+        SELECT id
+        FROM jogos
+        WHERE id = :jogo_id
+    """)
 
-def editar_casa(
-    db: Session,
-    jogo_id: int,
-    numero: int,
-    dados: CasaEditar
-):
-    # Início e chegada são posições reservadas
-    if numero == 1:
-        raise HTTPException(
-            status_code=400,
-            detail="A casa inicial não pode ser editada."
-        )
+    jogo = db.execute(
+        consulta,
+        {"jogo_id": jogo_id}
+    ).first()
 
-    # Procurar a casa no banco
-    casa = buscar_casa(db, jogo_id, numero)
-
-    if casa is None:
+    if jogo is None:
         raise HTTPException(
             status_code=404,
-            detail="Casa não encontrada neste jogo."
+            detail="Jogo de origem não encontrado."
         )
 
-    # A chegada também não pode ser editada
-    if casa.tipo in ("inicio", "fim"):
+
+# Consultar todas as cartas
+def consultar_cartas(db: Session):
+    return carta_repository.listar_cartas(db)
+
+
+# Consultar uma carta específica
+def consultar_carta(db: Session, carta_id: int):
+    carta = carta_repository.buscar_carta(db, carta_id)
+
+    if carta is None:
         raise HTTPException(
-            status_code=400,
-            detail="Casas de início e chegada não podem ser editadas."
+            status_code=404,
+            detail="Carta não encontrada."
         )
 
-    # Aplicar os dados validados pelo schema
-    alteracoes = dados.model_dump()
+    return carta
+
+
+# Criar uma nova carta
+def criar_carta(db: Session, dados: CartaCriar):
+    validar_jogo_origem(db, dados.jogo_origem_id)
 
     try:
-        for campo, valor in alteracoes.items():
-            setattr(casa, campo, valor)
+        carta_id = carta_repository.cadastrar_carta(
+            db,
+            dados.model_dump()
+        )
 
-        # Enviar alterações ao MySQL
-        salvar_alteracoes(db, casa)
+        carta = consultar_carta(db, carta_id)
 
-        # Confirmar transação
         db.commit()
 
-        # Atualizar o objeto retornado
-        db.refresh(casa)
+        return carta
 
-        return casa
-
-    except Exception:
+    except SQLAlchemyError:
         db.rollback()
-        raise
+
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao cadastrar a carta."
+        )
+
+
+# Editar uma carta existente
+def editar_carta(
+    db: Session,
+    carta_id: int,
+    dados: CartaEditar
+):
+    consultar_carta(db, carta_id)
+
+    validar_jogo_origem(db, dados.jogo_origem_id)
+
+    try:
+        carta_repository.atualizar_carta(
+            db,
+            carta_id,
+            dados.model_dump()
+        )
+
+        carta = consultar_carta(db, carta_id)
+
+        db.commit()
+
+        return carta
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao atualizar a carta."
+        )
+
+
+# Excluir uma carta existente
+def remover_carta(db: Session, carta_id: int):
+    consultar_carta(db, carta_id)
+
+    try:
+        carta_repository.excluir_carta(db, carta_id)
+
+        db.commit()
+
+        return {
+            "mensagem": "Carta excluída com sucesso."
+        }
+
+    except SQLAlchemyError:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=500,
+            detail="Erro ao excluir a carta."
+        )

@@ -3,10 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.database.connection import engine
-
-from app.routers import jogos, casas
-
-
+from app.routers import jogos, casas, cartas, jogo_cartas
 
 app = FastAPI(
     title="Jogo Tabuleiro API",
@@ -14,8 +11,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
+
+# Registrar os routers
 app.include_router(jogos.router)
 app.include_router(casas.router)
+app.include_router(cartas.router)
+app.include_router(jogo_cartas.router)
 
 
 @app.get("/")
@@ -31,7 +32,10 @@ def teste_banco():
     try:
         with engine.connect() as conexao:
             resultado = conexao.execute(
-                text("SELECT DATABASE() AS banco, VERSION() AS versao")
+                text(
+                    "SELECT DATABASE() AS banco, "
+                    "VERSION() AS versao"
+                )
             ).mappings().one()
 
         return {

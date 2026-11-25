@@ -16,3 +16,8 @@ class JogoResposta(JogoCriar):
     atualizado_em: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class JogoEditar(BaseModel):
+    nome: str = Field(min_length=1, max_length=100)
+    descricao: str | None = None
+    tema: str | None = Field(default=None, max_length=100)
